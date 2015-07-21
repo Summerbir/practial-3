@@ -1,0 +1,98 @@
+```{r, echo= FALSE}
+train.raw = read.csv("pml-training.csv")
+plot(train.raw$classe, main="Distirbution of classes in the training set", xlab="Class", ylab="Number of outcomes", col="blue")
+```
+```{r}
+test.raw = read.csv("pml-testing.csv")
+train.raw = train.raw[,8:ncol(train.raw)]
+test.raw = test.raw[,8:ncol(test.raw)]
+# Counting presence of NA or missing values in training set
+paste("A total of ",sum(apply(train.raw,2,function(x) (anyNA(x)) | any(x=="") ))," variables have at least one NA value or one blank value.",sep="")
+```
+# 100 variables have at least one NA or blank variable
+
+
+```{r}
+elim = apply(train.raw,2,function(x) (anyNA(x)) | any(x=="") ) # Vector of largely NA variables
+sum(!elim)
+```
+
+```{r}
+train = train.raw[,elim==FALSE] # Eliminated variables with NA and blank values
+test = test.raw[,elim==FALSE] # Eliminated variables with NA and blank values
+str(train)
+```
+```{r}
+str(test)
+```
+```{r}
+library(lattice)
+library(ggplot2)
+library(randomForest)
+
+forest.model = randomForest(classe ~ ., data=train, method="class")
+predict.forest.model = predict(forest.model, data = train, type="class")
+```
+ confusionMatrix(predict.forest.model, train$classe)
+
+```{r}
+forest.accuracy = sum(diag(table(predict.forest.model, train$classe)))/nrow(train)
+paste("Accuracy of Random Forest model is",format(forest.accuracy,digits=4) )
+```
+```{r}
+library(rpart)
+cart.model = rpart(classe ~ ., data=train, method="class") 
+predict.cart.model = predict(cart.model, data=train, type="class")
+cart.accuracy = sum(diag(table(train$classe, predict.cart.model)))/nrow(train)
+paste("Accuracy of CART model is",format(cart.accuracy,digits=3) )
+
+print("Predicted classes using the CART model")
+
+table(predict.cart.model)
+```
+```{r}
+print("Predicted classes using the Random Forest model")
+
+table(predict.forest.model)
+
+print("Actual classes")
+
+table(train$classe)
+```
+```{r}
+set.seed(29)
+train.ran <- train[sample(nrow(train)),]
+# For a k-fold randomization 
+k = 10
+n = floor(nrow(train.ran)/k) # n=1962 is the size of first nine folds, with the 10th fold of size 
+acc.vec <- vector("numeric", length = k)
+fold=data.frame("start"=numeric(), "finish"=numeric())
+for(i in 1:k)
+{
+  fold[i,1] = ((i-1)*n + 1)
+ fold[i,2] = (i*n) 
+ if(i==k)
+ {fold[i,2] = fold[i,2] + nrow(train.ran)%%n
+ }
+   range = fold[i,1]:fold[i,2] 
+cv.train = train.ran[-range,]
+ cv.test = train.ran[range,] 
+ forest.model.cv = randomForest(classe ~ ., data=cv.train) 
+predict.forest.model.cv = predict(forest.model.cv, data=cv.train, type="response") 
+forest.accuracy.cv = sum(diag(table(predict.forest.model.cv, cv.train$classe)))/nrow(cv.train)
+acc.vec[i] = forest.accuracy.cv
+print(paste("Accuracy of Random Forest model run ",i, " is ",format(forest.accuracy.cv,digits=4),"." ,sep=""))
+}
+paste("Mean accuracy is ",format(mean(acc.vec), digits=4)," standard deviation is ",format(sd(acc.vec), digits=4), sep="")
+
+print("Fold boundaries")
+
+fold
+
+paste("Testing set size in first ", k-1," folds were of size ",n,", and the last was of size ",(n + nrow(train)%%n),"." ,sep="")
+
+predict.forest.model.test = predict(forest.model, newdata = test, type="response")
+table(predict.forest.model.test)
+predict.forest.model.test
+```
+
